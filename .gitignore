@@ -42,3 +42,5 @@ next-env.d.ts
 
 /src/generated/prisma
 *.md
+echo "Blog-Management-System.postman_collection.json" >> .gitignore
+echo "Blog-Management-System.postman_environment.json" >> .gitignore
