@@ -1,0 +1,272 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Enums
+enum UserRole {
+  READER
+  AUTHOR
+  EDITOR
+  ADMIN
+}
+
+enum PostStatus {
+  DRAFT
+  PENDING
+  PUBLISHED
+  ARCHIVED
+}
+
+enum CommentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SPAM
+}
+
+// Models
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  username      String    @unique
+  password      String?   // Nullable for OAuth users
+  name          String?   // Full name for display
+  firstName     String?
+  lastName      String?
+  avatar        String?
+  bio           String?   @db.Text
+  role          UserRole  @default(READER)
+  emailVerified Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  posts         Post[]
+  comments      Comment[]
+  likes         Like[]
+  bookmarks     Bookmark[]
+  media         Media[]
+  accounts      Account[]
+  sessions      Session[]
+
+  @@map("users")
+}
+
+model Post {
+  id             String      @id @default(uuid())
+  title          String
+  slug           String      @unique
+  content        String      @db.Text
+  excerpt        String?
+  featuredImage  String?
+  status         PostStatus  @default(DRAFT)
+  publishedAt    DateTime?
+  scheduledFor   DateTime?
+  viewCount      Int         @default(0)
+  readingTime    Int?        // in minutes
+  seoTitle       String?
+  seoDescription String?
+  seoKeywords    String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  // Foreign Keys
+  authorId       String
+  author         User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  // Relations
+  categories     PostCategory[]
+  tags           PostTag[]
+  comments       Comment[]
+  likes          Like[]
+  bookmarks      Bookmark[]
+
+  @@index([slug])
+  @@index([status])
+  @@index([authorId])
+  @@index([publishedAt])
+  @@map("posts")
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?  @db.Text
+  image       String?
+  parentId    String?
+  parent      Category?  @relation("CategoryToCategory", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryToCategory")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  posts       PostCategory[]
+
+  @@index([slug])
+  @@map("categories")
+}
+
+model Tag {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  posts     PostTag[]
+
+  @@index([slug])
+  @@map("tags")
+}
+
+model PostCategory {
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId     String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId String
+
+  @@id([postId, categoryId])
+  @@map("post_categories")
+}
+
+model PostTag {
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId String
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tagId  String
+
+  @@id([postId, tagId])
+  @@map("post_tags")
+}
+
+model Comment {
+  id        String        @id @default(uuid())
+  content   String        @db.Text
+  status    CommentStatus @default(PENDING)
+  likeCount Int           @default(0)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  // Foreign Keys
+  postId    String
+  post      Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parentId  String?
+  parent    Comment?      @relation("CommentToComment", fields: [parentId], references: [id], onDelete: Cascade)
+
+  // Relations
+  replies   Comment[]     @relation("CommentToComment")
+
+  @@index([postId])
+  @@index([authorId])
+  @@index([status])
+  @@map("comments")
+}
+
+model Like {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // Foreign Keys
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([userId])
+  @@index([postId])
+  @@map("likes")
+}
+
+model Bookmark {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // Foreign Keys
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([userId])
+  @@index([postId])
+  @@map("bookmarks")
+}
+
+model Media {
+  id           String   @id @default(uuid())
+  fileName     String
+  originalName String
+  url          String
+  mimeType     String?
+  size         Int?     // in bytes
+  createdAt    DateTime @default(now())
+
+  // Foreign Keys
+  uploadedBy   String
+  uploader     User     @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+
+  @@index([uploadedBy])
+  @@map("media")
+}
+
+model Subscription {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@map("subscriptions")
+}
+
+// NextAuth.js Models
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
